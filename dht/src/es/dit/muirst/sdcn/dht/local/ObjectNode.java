@@ -33,8 +33,6 @@ public class ObjectNode implements Node<Object> {
     // closest larger nodeIds, and the | L | / 2 nodes with numerically closest smaller nodeIds,
     // relative to the present node’s nodeId.
     protected int[] leafSet;
-    protected Set smaller;
-    protected Set larger;
 
     // Neighborhood Set (M)
     // The neighborhood set M contains the nodeIds and IP addresses of the nodes
@@ -61,9 +59,6 @@ public class ObjectNode implements Node<Object> {
         this.neighborhoodSet = new Hashtable(l*2);
 
         leafSet = new int[l*2];
-        this.smaller = new LinkedHashSet();
-        this.larger = new LinkedHashSet();
-
 
         if (nearbyNode != null) {
             System.out.println("Pastry Node " + this.nodeId + ": Joining network...");
@@ -74,12 +69,14 @@ public class ObjectNode implements Node<Object> {
             }
 
             // Send a message to nearby node to join the network
+            //
             StateTable stateTable = nearbyNode.join(this);
 
             System.out.println("Pastry Node " + this.nodeId + ": Adding node " + nearbyNode.getNodeId() + " to local Routing Table");
             this.neighborhoodSet.put(nearbyNode.getNodeId(), nearbyNode);
 
-            // Last node on the path from A to Z send their state tables to X
+            // Last node on the path from A to Z sends their state tables to X
+            //
             System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received JOIN_RESPONSE (" + stateTable + ")" + ANSI_RESET);
 
             updateLeafSet(stateTable.getL());
@@ -97,16 +94,18 @@ public class ObjectNode implements Node<Object> {
 
     public void joined() {
         System.out.println("Pastry Node " + this.nodeId + ": Sending BROADCAST_STATE to neighbors...");
+
         for (int i = 0; i < this.leafSet.length; i++) {
             int nodeId = this.leafSet[i];
             if (nodeId != 0) {
-                System.out.println("Pastry Node " + this.nodeId + ": Neighbour Pastry node " + nodeId);
+                System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
                 Node node = (Node) this.neighborhoodSet.get(nodeId);
 
                 StateTable stateTable = new StateTable();
                 stateTable.setL(this.nodeId, this.leafSet);
                 stateTable.setM(this.neighborhoodSet);
 
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_STATE to neighbor " + nodeId + "..." + ANSI_RESET);
                 node.broadcastState(this, stateTable);
             }
         }
@@ -117,57 +116,15 @@ public class ObjectNode implements Node<Object> {
     public void broadcastState(Node fromNode, StateTable stateTable) {
         int fromNodeId = fromNode.getNodeId();
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received BROADCAST_STATE from " + fromNodeId + ANSI_RESET + " w/ State Table " + stateTable);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received BROADCAST_STATE from " + fromNodeId + ANSI_RESET + " with " + stateTable);
 
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Updating Leaf Set...");
         updateLeafSet(stateTable.getL());
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding node " + fromNode.getNodeId() + " to local Routing Table..." + ANSI_RESET);
-        this.neighborhoodSet.put(fromNode.getNodeId(), fromNode);
-
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding nodes " + stateTable.getM().keySet() + " to local Routing Table..." + ANSI_RESET);
-        this.neighborhoodSet.putAll(stateTable.getM());
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Updating Neighborhood Set...");
+        updateNeighborhoodSet(stateTable.getM());
 
     }
-
-//    public void addNodeToLeafSet(int newNodeId) {
-//        System.out.println("Pastry Node " + this.nodeId + ": Adding Node to Leaf Set (id=" + newNodeId + ") to Leaf Set " + Arrays.toString(this.leafSet) + "...");
-//
-//        int myNodeId = this.getNodeId();
-//
-//        if (this.smaller.isEmpty() && (newNodeId < myNodeId)) this.smaller.add(newNodeId);
-//        else if (this.larger.isEmpty() && (newNodeId > myNodeId)) this.larger.add(newNodeId);
-//        else if ((this.smaller.size() == 1) && (newNodeId < myNodeId)) this.smaller.add(newNodeId);
-//        else if ((this.larger.size() == 1) && (newNodeId > myNodeId)) this.larger.add(newNodeId);
-//        else {
-//            Object first = this.larger.last();
-//            Object last = this.larger.first();
-//
-//            if (newNodeId < (int) first) {
-//                this.larger.remove(first);
-//                this.larger.add(newNodeId);
-//            } else if (((int) first < newNodeId) && (newNodeId < (int) last)) {
-//                this.larger.remove(first);
-//                this.larger.add(newNodeId);
-//            }
-//        }
-//
-//        // Create internal attribute for leaf seat
-//        //
-//        Object[] smaller_array = this.smaller.toArray();
-//        Object[] larger_array = this.larger.toArray();
-//
-//        // Smaller
-//        if (smaller_array.length >= 2) this.leafSet[0] = (int) smaller_array[1];
-//        if (smaller_array.length >= 1) {
-//            this.leafSet[1] = (int) smaller_array[0];
-//        }
-//        // Larger
-//        if (larger_array.length == 2) this.leafSet[3] = (int) larger_array[1];
-//        if (larger_array.length >= 1) this.leafSet[2] = (int) larger_array[0];
-//
-//        System.out.println("Pastry Node " + this.nodeId + ": LeafSet updated " + this);
-//
-//    }
 
     @Override
     public void updateLeafSet(int[] leafs) {
@@ -246,88 +203,98 @@ public class ObjectNode implements Node<Object> {
         System.out.println("Pastry Node " + this.nodeId + ": Leaf Set SMALLER " + Arrays.toString(SMALLER.toArray()));
         System.out.println("Pastry Node " + this.nodeId + ": Leaf Set LARGER " + Arrays.toString(LARGER.toArray()));
 
-        // LARGER
-        this.larger.clear();
-        if (LARGER.size() >= 1) this.larger.add(LARGER.get(0));
-        if (LARGER.size() >= 2) this.larger.add(LARGER.get(1));
-
-        // SMALLER
-        this.smaller.clear();
-        if (SMALLER.size() >= 1) this.smaller.add(SMALLER.get(0));
-        if (SMALLER.size() >= 2) this.smaller.add(SMALLER.get(1));
-
-        if (SMALLER.size() > 2) {
-            if (this.larger.size() < 2) {
-                if ((this.larger.size() == 0)) {
-                    if (SMALLER.size() >= 3) this.larger.add(SMALLER.get(2));
-                    if (SMALLER.size() >= 4) this.larger.add(SMALLER.get(3));
-                }
-                else if ((this.larger.size() == 1) && (SMALLER.size() >= 3)) this.larger.add(SMALLER.get(2));
-            }
-        }
-
-        if (LARGER.size() > 2) {
-            if (this.smaller.size() < 2) {
-                if ((this.smaller.size() == 0)) {
-                    if (LARGER.size() >= 3) this.smaller.add(LARGER.get(2));
-                    if (LARGER.size() >= 4) this.smaller.add(LARGER.get(3));
-                }
-                else if ((this.smaller.size() == 1) && (LARGER.size() >= 3)) this.smaller.add(LARGER.get(2));
-            }
-        }
-
-        System.out.println("Pastry Node " + this.nodeId + ": UPDATED Leaf Set SMALLER " + this.smaller);
-        System.out.println("Pastry Node " + this.nodeId + ": UPDATED Leaf Set LARGER " + this.larger);
-
-        // Create internal attribute for leaf seat
+        // Reset Leaf Set
         //
-        Object[] smaller_array = this.smaller.toArray();
-        Object[] larger_array = this.larger.toArray();
-
-        System.out.println("Pastry Node " + this.nodeId + ": SMALLER array " + smaller_array.toString());
-        System.out.println("Pastry Node " + this.nodeId + ": LARGER array " + larger_array.toString());
-
         this.leafSet[0] = this.leafSet[1] = this.leafSet[2] = this.leafSet[3] = 0;
 
         // Smaller
-        if (smaller_array.length == 0) {
-            if (larger_array.length > 2) {
-                if (larger_array.length >= 4) this.leafSet[0] = ((Integer) larger_array[0]).intValue();
-                if (larger_array.length >= 3) this.leafSet[1] = ((Integer) larger_array[1]).intValue();
+        if (SMALLER.size() >= 2) {
+            int distance0 = Math.abs(distance(this.nodeId,  SMALLER.get(0)));
+            int distance1 = Math.abs(distance(this.nodeId, SMALLER.get(1)));
+
+            if (distance0 < distance1) {
+                this.leafSet[0] = SMALLER.get(1);
+                this.leafSet[1] = SMALLER.get(0);
+            }
+            else {
+                this.leafSet[0] = SMALLER.get(0);
+                this.leafSet[1] = SMALLER.get(1);
             }
         }
-        if (smaller_array.length == 2) {
-            this.leafSet[0] = ((Integer) smaller_array[1]).intValue();
-            this.leafSet[1] = ((Integer) smaller_array[0]).intValue();
-        }
-        if (smaller_array.length == 1) {
-            this.leafSet[0] = ((Integer) smaller_array[0]).intValue();
-            this.leafSet[1] = 0;
+        if (SMALLER.size() == 1) {
+            this.leafSet[0] = 0;
+            this.leafSet[1] = SMALLER.get(0);
         }
 
         // Larger
-        if (larger_array.length == 0) {
-            if (smaller_array.length > 2) {
-                if (smaller_array.length >= 4) this.leafSet[3] = ((Integer) smaller_array[3]).intValue();
-                if (smaller_array.length >= 3) this.leafSet[2] = ((Integer) smaller_array[2]).intValue();
+        if (LARGER.size() >= 2) {
+            int distance0 = Math.abs(distance(this.nodeId, LARGER.get(0)));
+            int distance1 = Math.abs(distance(this.nodeId, LARGER.get(1)));
+
+            if (distance0 < distance1) {
+                this.leafSet[2] = LARGER.get(0);
+                this.leafSet[3] = LARGER.get(1);
+            }
+            else {
+                this.leafSet[2] = LARGER.get(1);
+                this.leafSet[3] = LARGER.get(0);
             }
         }
-        if (larger_array.length == 2) {
-            this.leafSet[2] = ((Integer) larger_array[0]).intValue();
-            this.leafSet[3] = ((Integer) larger_array[1]).intValue();
-        }
-        if (larger_array.length == 1) {
-            this.leafSet[2] = ((Integer) larger_array[0]).intValue();
+        if (LARGER.size() == 1) {
+            this.leafSet[2] = LARGER.get(0);
             this.leafSet[3] = 0;
         }
 
-        System.out.println("Pastry Node " + this.nodeId + ": Leaf Set updated " + this);
+
+        if (SMALLER.size() == 1) {
+            if (LARGER.size() >= 3) {
+                this.leafSet[0] = LARGER.get(LARGER.size()-1);
+            }
+        }
+        if (SMALLER.size() == 0) {
+            if (LARGER.size() == 2) {
+                this.leafSet[1] = this.leafSet[3];
+                this.leafSet[3] = 0;
+            }
+            if (LARGER.size() == 3) {
+                this.leafSet[1] = LARGER.get(2);
+            }
+            if (LARGER.size() >= 4) {
+                this.leafSet[0] = LARGER.get(LARGER.size()-2);
+                this.leafSet[1] = LARGER.get(LARGER.size()-1);
+            }
+        }
+
+        if (LARGER.size() == 1) {
+            if (SMALLER.size() >= 3) {
+                this.leafSet[3] = SMALLER.get(SMALLER.size()-1);
+            }
+        }
+        if (LARGER.size() == 0) {
+            if (SMALLER.size() == 2) {
+                this.leafSet[2] = this.leafSet[0];
+                this.leafSet[0] = 0;
+            }
+            if (SMALLER.size() == 3) {
+                this.leafSet[2] = SMALLER.get(2);
+            }
+            if (SMALLER.size() >= 4) {
+                this.leafSet[2] = SMALLER.get(SMALLER.size()-1);
+                this.leafSet[3] = SMALLER.get(SMALLER.size()-2);
+            }
+        }
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Leaf Set updated " + ANSI_RESET + this);
 
     }
 
     @Override
     public void updateNeighborhoodSet(Hashtable neighborhoodSet) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Adding nodes " + neighborhoodSet.keySet() + " to Neighborhood Set...");
+
         this.neighborhoodSet.putAll(neighborhoodSet);
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Neighborhood Set updated " + ANSI_RESET + this);
     }
 
     protected int distance(int fromNodeId, int toNodeId) {
@@ -361,7 +328,6 @@ public class ObjectNode implements Node<Object> {
 
             if (nodes[i] == 0) leafDistances[i] = 0;
             else {
-//                leafDistances[i] = distance(nodes[i], nodeId);
                 leafDistances[i] = distance(nodeId, nodes[i]);
             }
         }
@@ -372,30 +338,14 @@ public class ObjectNode implements Node<Object> {
     }
 
 
-    public boolean isInLeafSet(int nodeId, int[] leafDistances) {
-
-        int smallerNodeId = -1;
-        int largerNodeId = -1;
-
-        // SMALLER
-        if ((this.leafSet[0] == 0) && (this.leafSet[1]) == 0) smallerNodeId = 0;
-        else if ((this.leafSet[0] == 0) && (this.leafSet[1]) != 0) smallerNodeId = this.leafSet[1];
-        else if ((this.leafSet[0] != 0) && (this.leafSet[1]) != 0) smallerNodeId = this.leafSet[0];
-
-        // LARGER
-        if ((this.leafSet[3] == 0) && (this.leafSet[2]) == 0) largerNodeId = 0;
-        else if ((this.leafSet[3] == 0) && (this.leafSet[2]) != 0) largerNodeId = this.leafSet[2];
-        else if ((this.leafSet[3] != 0) && (this.leafSet[2]) != 0) largerNodeId = this.leafSet[3];
-
-        System.out.println("Pastry Node " + this.nodeId + ": Smaller is " + smallerNodeId + " and larger is " + largerNodeId );
-
-        if (largerNodeId == 0) largerNodeId = MAX_NODE_IDS;
-        if ((smallerNodeId < nodeId) || (nodeId < largerNodeId)) {
-            System.out.println("Pastry Node " + this.nodeId + ": NodeId " + nodeId + " is within range of our Leaf Set");
+    public boolean isInLeafSet(int newNodeId, int routeToNodeId) {
+        if (routeToNodeId == this.getNodeId()) {
+            System.out.println("Pastry Node " + this.nodeId + ": NodeId " + newNodeId + " is within range of local node Leaf Set");
             return true;
         }
-        else
+        else {
             return false;
+        }
     }
 
     @Override
@@ -425,8 +375,8 @@ public class ObjectNode implements Node<Object> {
     public String toString() {
         return "ObjectNode {" +
                 "name='" + name + '\'' +
-                ", " + ANSI_RED + "nodeId=" + nodeId + ANSI_RESET +
-                ", " + ANSI_BLUE + "L=" + Arrays.toString(leafSet) + ANSI_RESET +
+                ", " + ANSI_RED + "nodeId=" + this.nodeId + ANSI_RESET +
+                ", " + ANSI_BLUE + "L=" + Arrays.toString(this.leafSet) + ANSI_RESET +
                 ", M=" + this.neighborhoodSet.keySet() +
                 '}';
     }
@@ -450,50 +400,46 @@ public class ObjectNode implements Node<Object> {
 
         int[] leafDistances = calculateDistances(this.leafSet, newNodeId);
 
-        if (isInLeafSet(newNodeId, leafDistances)) { // leafDistances are not used
-            // New nodeId is within range of our leaf set
-            //
-            int minDistance = MAX_NODE_IDS;
-            int nodeIndex = -1;
+        // New nodeId is within range of our leaf set
+        //
+        int minDistance = MAX_NODE_IDS;
+        int nodeIndex = -1;
 
-            int d_fromLocalNode = distance(myNodeId, newNodeId);
-            minDistance = d_fromLocalNode;
+        int d_fromLocalNode = distance(myNodeId, newNodeId);
+        minDistance = d_fromLocalNode;
 
-            int[] numbers = {1, 2, 0, 3};
-            for (int i : numbers) {
-                if ((leafDistances[i] != 0) && (Math.abs(leafDistances[i]) < Math.abs(minDistance))) {
-                    nodeIndex = i;
-                    minDistance = leafDistances[i];
-                }
-            }
-
-            System.out.println("Pastry Node " + this.nodeId + ": Node index " + nodeIndex + " with min distance of " + minDistance);
-
-            int[] result = new int[2];
-            if (nodeIndex == -1) result[0] = myNodeId;
-            else result[0] = leafSet[nodeIndex];
-            result[1] = minDistance;
-
-            int routeToNodeId = result[0];
-            if (routeToNodeId == this.getNodeId()) {
-                System.out.println("Pastry Node " + this.nodeId + ": Processing request in local node " + result[0] + " (with min distance of " + result[1] + ")");
-
-                int[] newNode = {newNodeId};
-                updateLeafSet(newNode);
-//                addNodeToLeafSet(newNodeId);
-            } else {
-                Node fwdNode = (Node) this.neighborhoodSet.get(routeToNodeId);
-
-                System.out.println("Pastry Node " + this.nodeId + ": Forward request to nodeId " + result[0] + " (with min distance of " + result[1] + ")");
-
-                StateTable stateTable_X = fwdNode.join(node);
-
-                return stateTable_X;
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if ((leafDistances[i] != 0) && (Math.abs(leafDistances[i]) < Math.abs(minDistance))) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
             }
         }
-        else {
-            // TODO: Add your code here...
-            System.out.println("Pastry Node " + this.nodeId + ": ERROR ");
+
+        System.out.println("Pastry Node " + this.nodeId + ": Node index " + nodeIndex + " with min distance of " + minDistance);
+
+        int[] result = new int[2];
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+        result[1] = minDistance;
+
+        int routeToNodeId = result[0];
+
+        if (isInLeafSet(newNodeId, routeToNodeId)) {
+            System.out.println("Pastry Node " + this.nodeId + ": Processing request in local node " + result[0] + " (with min distance of " + result[1] + ")");
+
+            int[] newNode = {newNodeId};
+            updateLeafSet(newNode);
+
+        } else {
+            Node fwdNode = (Node) this.neighborhoodSet.get(routeToNodeId);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Route JOIN request to nodeId " + result[0] + " (with min distance of " + result[1] + ")" + ANSI_RESET);
+
+            StateTable stateTable_X = fwdNode.join(node);
+
+            return stateTable_X;
+
         }
 
         stateTable.setM(this.neighborhoodSet);
@@ -504,7 +450,7 @@ public class ObjectNode implements Node<Object> {
 
     @Override
     public void leave() {
-
+        // TODO: Add your code here...
     }
 
     protected int[] getStateTable() {
@@ -589,6 +535,20 @@ public class ObjectNode implements Node<Object> {
         System.out.println(node4);
         System.out.println(node5);
         System.out.println(node6);
+        System.out.println("-----");
+
+        System.out.println("-7----");
+        Node node7 = new ObjectNode("node127.dit.upm.es");
+        nodeId = node7.initPastry(node1, 127);
+
+        System.out.println("-----");
+        System.out.println(node1);
+        System.out.println(node2);
+        System.out.println(node3);
+        System.out.println(node4);
+        System.out.println(node5);
+        System.out.println(node6);
+        System.out.println(node7);
         System.out.println("-----");
 
 
