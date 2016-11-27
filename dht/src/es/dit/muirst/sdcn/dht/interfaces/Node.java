@@ -1,16 +1,15 @@
 package es.dit.muirst.sdcn.dht.interfaces;
 
 import es.dit.muirst.sdcn.dht.StateTable;
-
 import java.util.Hashtable;
 
 public interface Node <Address> {
 
-    // Init Pastry (simplified)
+    // Init Pastry
     //
     int initPastry(Node nearbyNode, int key);
 
-    int getKey();
+    int getNodeId();
     Address get(int key);
 
     // Core routing algorithm
@@ -21,11 +20,11 @@ public interface Node <Address> {
     //
     StateTable join(Node node);
     void leave();
-    void updateState(Node fromNode, StateTable stateTable);
+    void broadcastState(Node fromNode, StateTable stateTable);
 
     // Internal operations
     //
     void updateLeafSet(int[] leafs);
-    void updateRoutingTable(Hashtable routingTable);
+    void updateNeighborhoodSet(Hashtable neighborhoodSet);
 
 }
