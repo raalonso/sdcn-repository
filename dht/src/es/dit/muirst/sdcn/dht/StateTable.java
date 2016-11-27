@@ -4,21 +4,22 @@ import java.util.Arrays;
 import java.util.Hashtable;
 
 public class StateTable {
+
     private static final int l = 2;
 
-    Hashtable R;
+    Hashtable M;
     int[] L;
 
-    public Hashtable getR() {
-        return R;
+    public Hashtable getM() {
+        return M;
     }
 
     public int[] getL() {
         return L;
     }
 
-    public void setR(Hashtable routingTable) {
-        this.R = (Hashtable) routingTable.clone();
+    public void setM(Hashtable routingTable) {
+        this.M = (Hashtable) routingTable.clone();
     }
 
     public void setL(int nodeId, int[] leafSet) {
@@ -33,9 +34,9 @@ public class StateTable {
 
     @Override
     public String toString() {
-        return "StateTable{" +
-                "R=" + R +
-                ", L=" + Arrays.toString(L) +
+        return "StateTable {" +
+                "M=" + this.M.keySet() +
+                ", L=" + Arrays.toString(this.L) +
                 '}';
     }
 }
