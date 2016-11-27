@@ -22,23 +22,27 @@ public class ObjectNode implements Node<Object> {
     public static final String ANSI_WHITE = "\u001B[37m";
 
     private static final int b = 7;
-    private static final int MAX_NODE_IDS = (int) Math.pow(2, b); // 2^b = 2^7 = 128
+    private static final int MAX_NODE_IDS = (int) Math.pow(2, b); // 2^b = 2^7 = 128 nodes
     private static final int l = 2;
 
     protected String name;
-    protected int nodeId;
+    protected int nodeId; // Unique numeric identifier of each node in the Pastry network
 
-    // Routing table:
-    Hashtable routingTable;
-
-    // Neighborhood set: not normally used in the routing process
-
-    // Leaf set
+    // Leaf Set (L)
+    // The leaf set L is the set of nodes with the | L | / 2 numerically
+    // closest larger nodeIds, and the | L | / 2 nodes with numerically closest smaller nodeIds,
+    // relative to the present node’s nodeId.
     protected int[] leafSet;
-    //    protected SortedSet smaller;
-//    protected SortedSet larger;
     protected Set smaller;
     protected Set larger;
+
+    // Neighborhood Set (M)
+    // The neighborhood set M contains the nodeIds and IP addresses of the nodes
+    // that are closest (according the proximity metric) to the local node.
+    protected Hashtable neighborhoodSet;
+
+    // Routing Table (R): not used
+
 
 
     public ObjectNode(String name) {
@@ -54,78 +58,81 @@ public class ObjectNode implements Node<Object> {
         // LOGGER.info("INIT Pastry for node " + this.nodeId);
         System.out.println("INIT Pastry for node " + this.nodeId);
 
-        this.routingTable = new Hashtable(l*2);
+        this.neighborhoodSet = new Hashtable(l*2);
 
         leafSet = new int[l*2];
-//        this.smaller = new TreeSet();
-//        this.larger = new TreeSet();
         this.smaller = new LinkedHashSet();
         this.larger = new LinkedHashSet();
-
 
 
         if (nearbyNode != null) {
             System.out.println("Pastry Node " + this.nodeId + ": Joining network...");
 
+            if (nearbyNode == null) {
+                System.out.println("Pastry Node " + this.nodeId + ": ERROR No known node to join Pastry network");
+                return -1;
+            }
+
             // Send a message to nearby node to join the network
             StateTable stateTable = nearbyNode.join(this);
 
-            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding node " + nearbyNode.getKey() + " to local Routing Table" + ANSI_RESET);
-            this.routingTable.put(nearbyNode.getKey(), nearbyNode);
+            System.out.println("Pastry Node " + this.nodeId + ": Adding node " + nearbyNode.getNodeId() + " to local Routing Table");
+            this.neighborhoodSet.put(nearbyNode.getNodeId(), nearbyNode);
 
             // Last node on the path from A to Z send their state tables to X
-            System.out.println("Pastry Node " + this.nodeId + ": Received STATE_TABLE " + Arrays.toString(stateTable.getL()));
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received JOIN_RESPONSE (" + stateTable + ")" + ANSI_RESET);
 
             updateLeafSet(stateTable.getL());
-            updateRoutingTable(stateTable.getR());
+            updateNeighborhoodSet(stateTable.getM());
 
             // Communicate neighbors that a new node has joined
             //
-            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Communicate neighbours that node " + this.nodeId + " just JOINED..." + ANSI_RESET);
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Communicate neighbours that node " + this.nodeId + " joined Pastry network..." + ANSI_RESET);
             joined();
         }
 
         return this.nodeId;
     }
 
+
     public void joined() {
-        System.out.println("Pastry Node " + this.nodeId + ": Sending JOINED to neighbors...");
+        System.out.println("Pastry Node " + this.nodeId + ": Sending BROADCAST_STATE to neighbors...");
         for (int i = 0; i < this.leafSet.length; i++) {
             int nodeId = this.leafSet[i];
             if (nodeId != 0) {
                 System.out.println("Pastry Node " + this.nodeId + ": Neighbour Pastry node " + nodeId);
-                Node node = (Node) this.routingTable.get(nodeId);
+                Node node = (Node) this.neighborhoodSet.get(nodeId);
 
                 StateTable stateTable = new StateTable();
                 stateTable.setL(this.nodeId, this.leafSet);
-                stateTable.setR(this.routingTable);
+                stateTable.setM(this.neighborhoodSet);
 
-                node.updateState(this, stateTable);
+                node.broadcastState(this, stateTable);
             }
         }
 
     }
 
     @Override
-    public void updateState(Node fromNode, StateTable stateTable) {
-        int fromNodeId = fromNode.getKey();
+    public void broadcastState(Node fromNode, StateTable stateTable) {
+        int fromNodeId = fromNode.getNodeId();
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received UPDATE_STATE request from " + fromNodeId + ANSI_RESET + " w/ State Table " + stateTable);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received BROADCAST_STATE from " + fromNodeId + ANSI_RESET + " w/ State Table " + stateTable);
 
         updateLeafSet(stateTable.getL());
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding node " + fromNode.getKey() + " to local Routing Table..." + ANSI_RESET);
-        this.routingTable.put(fromNode.getKey(), fromNode);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding node " + fromNode.getNodeId() + " to local Routing Table..." + ANSI_RESET);
+        this.neighborhoodSet.put(fromNode.getNodeId(), fromNode);
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding nodes " + stateTable.getR().keySet() + " to local Routing Table..." + ANSI_RESET);
-        this.routingTable.putAll(stateTable.getR());
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding nodes " + stateTable.getM().keySet() + " to local Routing Table..." + ANSI_RESET);
+        this.neighborhoodSet.putAll(stateTable.getM());
 
     }
 
 //    public void addNodeToLeafSet(int newNodeId) {
 //        System.out.println("Pastry Node " + this.nodeId + ": Adding Node to Leaf Set (id=" + newNodeId + ") to Leaf Set " + Arrays.toString(this.leafSet) + "...");
 //
-//        int myNodeId = this.getKey();
+//        int myNodeId = this.getNodeId();
 //
 //        if (this.smaller.isEmpty() && (newNodeId < myNodeId)) this.smaller.add(newNodeId);
 //        else if (this.larger.isEmpty() && (newNodeId > myNodeId)) this.larger.add(newNodeId);
@@ -319,8 +326,8 @@ public class ObjectNode implements Node<Object> {
     }
 
     @Override
-    public void updateRoutingTable(Hashtable routingTable) {
-        this.routingTable.putAll(routingTable);
+    public void updateNeighborhoodSet(Hashtable neighborhoodSet) {
+        this.neighborhoodSet.putAll(neighborhoodSet);
     }
 
     protected int distance(int fromNodeId, int toNodeId) {
@@ -371,14 +378,14 @@ public class ObjectNode implements Node<Object> {
         int largerNodeId = -1;
 
         // SMALLER
-        if ((leafSet[0] == 0) && (leafSet[1]) == 0) smallerNodeId = 0;
-        else if ((leafSet[0] == 0) && (leafSet[1]) != 0) smallerNodeId = leafSet[1];
-        else if ((leafSet[0] != 0) && (leafSet[1]) != 0) smallerNodeId = leafSet[0];
+        if ((this.leafSet[0] == 0) && (this.leafSet[1]) == 0) smallerNodeId = 0;
+        else if ((this.leafSet[0] == 0) && (this.leafSet[1]) != 0) smallerNodeId = this.leafSet[1];
+        else if ((this.leafSet[0] != 0) && (this.leafSet[1]) != 0) smallerNodeId = this.leafSet[0];
 
         // LARGER
-        if ((leafSet[3] == 0) && (leafSet[2]) == 0) largerNodeId = 0;
-        else if ((leafSet[3] == 0) && (leafSet[2]) != 0) largerNodeId = leafSet[2];
-        else if ((leafSet[3] != 0) && (leafSet[2]) != 0) largerNodeId = leafSet[3];
+        if ((this.leafSet[3] == 0) && (this.leafSet[2]) == 0) largerNodeId = 0;
+        else if ((this.leafSet[3] == 0) && (this.leafSet[2]) != 0) largerNodeId = this.leafSet[2];
+        else if ((this.leafSet[3] != 0) && (this.leafSet[2]) != 0) largerNodeId = this.leafSet[3];
 
         System.out.println("Pastry Node " + this.nodeId + ": Smaller is " + smallerNodeId + " and larger is " + largerNodeId );
 
@@ -405,7 +412,7 @@ public class ObjectNode implements Node<Object> {
     }
 
     @Override
-    public int getKey() {
+    public int getNodeId() {
         return this.nodeId;
     }
 
@@ -416,30 +423,30 @@ public class ObjectNode implements Node<Object> {
 
     @Override
     public String toString() {
-        return "LocalNode{" +
+        return "ObjectNode {" +
                 "name='" + name + '\'' +
                 ", " + ANSI_RED + "nodeId=" + nodeId + ANSI_RESET +
-                ", " + ANSI_BLUE + "leafSet=" + Arrays.toString(leafSet) + ANSI_RESET +
-                ", routingTable=" + this.routingTable.keySet() +
+                ", " + ANSI_BLUE + "L=" + Arrays.toString(leafSet) + ANSI_RESET +
+                ", M=" + this.neighborhoodSet.keySet() +
                 '}';
     }
 
     @Override
     public StateTable join(Node node) {
-        System.out.println("Pastry Node " + this.nodeId + ": Received JOIN request from " + node.getKey());
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received JOIN request from " + node.getNodeId() + ANSI_RESET);
 
         // Maps nodeId to address of node (in local is address of object)
         //
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Adding node " + node.getKey() + " to local Routing Table" + ANSI_RESET);
-        this.routingTable.put(node.getKey(), node);
+        System.out.println("Pastry Node " + this.nodeId + ": Adding node " + node.getNodeId() + " to local Routing Table");
+        this.neighborhoodSet.put(node.getNodeId(), node);
 
         // Create stateTable to send to other nodes
         //
         StateTable stateTable = new StateTable();
         stateTable.setL(this.nodeId, this.leafSet);
 
-        int newNodeId = node.getKey();
-        int myNodeId = this.getKey();
+        int newNodeId = node.getNodeId();
+        int myNodeId = this.getNodeId();
 
         int[] leafDistances = calculateDistances(this.leafSet, newNodeId);
 
@@ -468,14 +475,14 @@ public class ObjectNode implements Node<Object> {
             result[1] = minDistance;
 
             int routeToNodeId = result[0];
-            if (routeToNodeId == this.getKey()) {
+            if (routeToNodeId == this.getNodeId()) {
                 System.out.println("Pastry Node " + this.nodeId + ": Processing request in local node " + result[0] + " (with min distance of " + result[1] + ")");
 
                 int[] newNode = {newNodeId};
                 updateLeafSet(newNode);
 //                addNodeToLeafSet(newNodeId);
             } else {
-                Node fwdNode = (Node) this.routingTable.get(routeToNodeId);
+                Node fwdNode = (Node) this.neighborhoodSet.get(routeToNodeId);
 
                 System.out.println("Pastry Node " + this.nodeId + ": Forward request to nodeId " + result[0] + " (with min distance of " + result[1] + ")");
 
@@ -489,7 +496,7 @@ public class ObjectNode implements Node<Object> {
             System.out.println("Pastry Node " + this.nodeId + ": ERROR ");
         }
 
-        stateTable.setR(this.routingTable);
+        stateTable.setM(this.neighborhoodSet);
 
         return stateTable;
 
