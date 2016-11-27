@@ -7,8 +7,9 @@ public class StateTable {
 
     private static final int l = 2;
 
-    Hashtable M;
-    int[] L;
+    int nodeId; // State Table of this nodeId
+    Hashtable M; // Neighborhood set
+    int[] L; // Leaf set
 
     public Hashtable getM() {
         return M;
@@ -34,7 +35,7 @@ public class StateTable {
 
     @Override
     public String toString() {
-        return "StateTable {" +
+        return "StateTable Node " + L[2] + " {" +
                 "M=" + this.M.keySet() +
                 ", L=" + Arrays.toString(this.L) +
                 '}';
