@@ -1,8 +1,10 @@
 package es.dit.muirst.sdcn.dht.local;
 
+import es.dit.muirst.sdcn.dht.PastryNode;
 import es.dit.muirst.sdcn.dht.interfaces.DHT;
 import es.dit.muirst.sdcn.dht.interfaces.Node;
 import es.dit.muirst.sdcn.dht.StateTable;
+import es.dit.muirst.sdcn.dht.messaging.GetDataRequest;
 import es.dit.muirst.sdcn.dht.messaging.Message;
 import es.dit.muirst.sdcn.dht.messaging.PutDataRequest;
 import es.dit.muirst.sdcn.dht.messaging.RemoveDataRequest;
@@ -11,53 +13,16 @@ import java.util.*;
 import java.util.logging.Logger;
 
 
-public class ObjectNode implements Node<Object>, DHT<String> {
+public class ObjectNode extends PastryNode<Object> implements DHT<String> {
 
     private static final Logger LOGGER = Logger.getLogger(ObjectNode.class.getName());
 
-    public static final String ANSI_RESET = "\u001B[0m";
-    public static final String ANSI_BLACK = "\u001B[30m";
-    public static final String ANSI_RED = "\u001B[31m";
-    public static final String ANSI_GREEN = "\u001B[32m";
-    public static final String ANSI_YELLOW = "\u001B[33m";
-    public static final String ANSI_BLUE = "\u001B[34m";
-    public static final String ANSI_PURPLE = "\u001B[35m";
-    public static final String ANSI_CYAN = "\u001B[36m";
-    public static final String ANSI_WHITE = "\u001B[37m";
-
-    private static final int b = 8;
-    private static final int MAX_NODE_IDS = (int) Math.pow(2, b); // 2^b = 2^8 = 256 nodes
-    private static final int l = 2;
-
-    protected String name;
-    protected int nodeId; // Unique numeric identifier of each node in the Pastry network
-
-    // Leaf Set (L)
-    // The leaf set L is the set of nodes with the | L | / 2 numerically
-    // closest larger nodeIds, and the | L | / 2 nodes with numerically closest smaller nodeIds,
-    // relative to the present node’s nodeId.
-    protected int[] leafSet;
-
-    // Neighborhood Set (M)
-    // The neighborhood set M contains the nodeIds and IP addresses of the nodes
-    // that are closest (according the proximity metric) to the local node.
-    protected Hashtable neighborhoodSet;
-
-    // Routing Table (R): not used
-
-    //
-    protected Hashtable localData;
-
-
 
     public ObjectNode(String name) {
-        this.name = name;
-        this.nodeId = -1;
-
-        this.localData = new Hashtable();
+        super(name);
     }
 
-    public int initPastry(Node bootstrapNode, int key) {
+    public int initPastry(int key) throws Exception {
 
         if (key == 0) this.nodeId = createKey();
         else this.nodeId = key;
@@ -65,29 +30,26 @@ public class ObjectNode implements Node<Object>, DHT<String> {
         // LOGGER.info("INIT Pastry for node " + this.nodeId);
         System.out.println("INIT Pastry for node " + this.nodeId);
 
-        this.neighborhoodSet = new Hashtable(l*2);
-
-        leafSet = new int[l*2];
-
-        if (bootstrapNode != null) {
+        if (this.bootstrapNode != null) {
             System.out.println("Pastry Node " + this.nodeId + ": Joining network...");
 
-            if (bootstrapNode == null) {
+            if (this.bootstrapNode == null) {
                 System.out.println("Pastry Node " + this.nodeId + ": ERROR No known node to join Pastry network");
                 return -1;
             }
 
-            // Send a message to nearby node to join the network
+            // Send a message to bootstrap node to join the Pastry network. Node that finally attends the join request
+            // sends back their State tables
             //
-            StateTable stateTable = bootstrapNode.join(this);
+            StateTable stateTable = ((ObjectNode) (this.bootstrapNode)).join(this);
 
-            System.out.println("Pastry Node " + this.nodeId + ": Adding node " + bootstrapNode.getNodeId() + " to local Routing Table");
-            this.neighborhoodSet.put(bootstrapNode.getNodeId(), bootstrapNode);
-
-            // Last node on the path from A to Z sends their state tables to X
-            //
             System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received JOIN_RESPONSE (" + stateTable + ")" + ANSI_RESET);
 
+            System.out.println("Pastry Node " + this.nodeId + ": Adding node " + ((ObjectNode) (this.bootstrapNode)).getNodeId() + " to Neighborhood Set");
+            this.neighborhoodSet.put(((ObjectNode) (this.bootstrapNode)).getNodeId(), bootstrapNode);
+
+            // Update state tables: Leaf Set and Neighborhood Set
+            //
             updateLeafSet(stateTable.getL());
             updateNeighborhoodSet(stateTable.getM());
 
@@ -100,6 +62,10 @@ public class ObjectNode implements Node<Object>, DHT<String> {
         return this.nodeId;
     }
 
+    @Override
+    public void closePastry() {
+        // Do nothing: intentionally empty
+    }
 
     public void joined() {
         System.out.println("Pastry Node " + this.nodeId + ": Sending BROADCAST_STATE to neighbors...");
@@ -434,12 +400,6 @@ public class ObjectNode implements Node<Object>, DHT<String> {
         // numerically closest to D.
     }
 
-    protected int createKey() {
-        int hash = Math.abs(this.name.hashCode() % MAX_NODE_IDS);
-
-        return hash;
-    }
-
     @Override
     public int getNodeId() {
         return this.nodeId;
@@ -687,42 +647,6 @@ public class ObjectNode implements Node<Object>, DHT<String> {
 
         // Key inside Leaf Set
         //
-//        boolean isInsideLeafSet = false;
-//        int distance = 0;
-//        if ((myNodeId < this.leafSet[2]) && (myNodeId < this.leafSet[3]) && (this.leafSet[2] < this.leafSet[3]) && (key > this.leafSet[2]) && (key < this.leafSet[3])) {
-//            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "isInsideLeafSet = true CASE 1" + ANSI_RESET);
-//            isInsideLeafSet = true;
-//        }
-//        else if ((this.leafSet[0] < this.leafSet[1]) && (this.leafSet[1] < this.leafSet[2]) && (this.leafSet[2] > this.leafSet[3])) {
-//            // Example: [110 120 (130) 140 40]
-//            if ((key > this.leafSet[0]) && (key < this.leafSet[2])) {
-//                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "isInsideLeafSet = true CASE 2" + ANSI_RESET);
-//                isInsideLeafSet = true;
-//            }
-//            else if ((key > this.leafSet[2]) && (key < this.leafSet[3])) {
-//                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "isInsideLeafSet = true CASE 3" + ANSI_RESET);
-//                isInsideLeafSet = true;
-//            }
-//        }
-//        else if ((this.leafSet[0] < this.leafSet[1]) && (this.leafSet[1] < this.leafSet[2]) && (this.leafSet[2] < this.leafSet[3])) {
-//            if ((key > this.leafSet[0]) && (key < this.leafSet[3])) {
-//                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "isInsideLeafSet = true CASE 4" + ANSI_RESET);
-//                isInsideLeafSet = true;
-//            }
-//        }
-//        else {
-//            if (d_fromLocalNode >= 0) {
-//                distance = greaterFwDistances(leafDistances);
-//            } else {
-//                // d_fromLocalNode < 0
-//                distance = greaterBwDistances(leafDistances);
-//            }
-//
-//            if (Math.abs(d_fromLocalNode) < Math.abs(distance)) {
-//                isInsideLeafSet = true;
-//            }
-//        }
-
         boolean isInsideLeafSet = true;
         if (isInsideLeafSet) {
             if (!this.localData.containsKey(key)) {
@@ -736,12 +660,6 @@ public class ObjectNode implements Node<Object>, DHT<String> {
                 System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key ALREADY stored in Local Hash Table " + ANSI_RESET);
             }
         }
-
-//        if (request.isFw_flag()) {
-//            // Forward data to all nodes in the leaf set
-//            //
-//            broadcastData(key, data, false);
-//        }
 
     }
 
@@ -781,6 +699,11 @@ public class ObjectNode implements Node<Object>, DHT<String> {
             }
         }
 
+    }
+
+    @Override
+    public String getDataRequest(GetDataRequest request) {
+        return null;
     }
 
     @Override
@@ -903,92 +826,6 @@ public class ObjectNode implements Node<Object>, DHT<String> {
             fwdNode.removeData(key);
 
         }
-
-    }
-
-
-
-    public static void main(String[] args) {
-        System.out.println("LocalNode main!\n");
-        int nodeId = -1;
-
-        System.out.println("-1----");
-        Node node1 = new ObjectNode("master53.dit.upm.es");
-        nodeId = node1.initPastry(null, 53);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println("-----\n");
-
-        System.out.println("-2----");
-        Node node2 = new ObjectNode("node60.dit.upm.es");
-        nodeId = node2.initPastry(node1, 60);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println("-----\n");
-
-        System.out.println("-3----");
-        Node node3 = new ObjectNode("node50.dit.upm.es");
-        nodeId = node3.initPastry(node1, 50);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println(node3);
-        System.out.println("-----\n");
-
-        System.out.println("-4----");
-        Node node4 = new ObjectNode("node65.dit.upm.es");
-        nodeId = node4.initPastry(node1, 65);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println(node3);
-        System.out.println(node4);
-        System.out.println("-----\n");
-
-        System.out.println("-5----");
-        Node node5 = new ObjectNode("node120.dit.upm.es");
-        nodeId = node5.initPastry(node1, 120);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println(node3);
-        System.out.println(node4);
-        System.out.println(node5);
-        System.out.println("-----\n");
-
-        System.out.println("-6----");
-        Node node6 = new ObjectNode("node115.dit.upm.es");
-        nodeId = node6.initPastry(node1, 115);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println(node3);
-        System.out.println(node4);
-        System.out.println(node5);
-        System.out.println(node6);
-        System.out.println("-----");
-
-        System.out.println("-7----");
-        Node node7 = new ObjectNode("node127.dit.upm.es");
-        nodeId = node7.initPastry(node1, 127);
-
-        System.out.println("-----");
-        System.out.println(node1);
-        System.out.println(node2);
-        System.out.println(node3);
-        System.out.println(node4);
-        System.out.println(node5);
-        System.out.println(node6);
-        System.out.println(node7);
-        System.out.println("-----");
-
 
     }
 
