@@ -4,6 +4,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Hashtable;
+
 import static org.junit.Assert.*;
 
 
@@ -14,7 +16,7 @@ public class ObjectNodeTest {
     @Before
     public void setUp() throws Exception {
         this.node = new ObjectNode("test.node.dit.upm.es");
-        node.nodeId = 53;
+        node.setNodeId(53);
     }
 
     @After
@@ -34,7 +36,8 @@ public class ObjectNodeTest {
 
     @Test
     public void distance() throws Exception {
-
+        int d = node.distance(52, 140);
+        System.out.println(d);
     }
 
     @Test
@@ -43,13 +46,19 @@ public class ObjectNodeTest {
     }
 
     @Test
+    public void localDHT() throws Exception {
+
+    }
+
+
+    @Test
     public void isInLeafSet() throws Exception {
         boolean result;
         int newNodeId;
 
-        int[] leafSet = {120, 50, 60, 65};
-        node.leafSet = leafSet;
-        int[] leafDistances = {};
+//        int[] leafSet = {120, 50, 60, 65};
+//        node.leafSet = leafSet;
+//        int[] leafDistances = {};
 
 
 //        newNodeId = 54;
