@@ -1,6 +1,6 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
-public class PutDataRequest {
+public class PutDataRequest extends Message {
     protected int key;
     protected String data;
 
