@@ -4,6 +4,7 @@ public class RemoveDataRequest extends Message {
     protected int key;
 
     public RemoveDataRequest(int key) {
+        this.request_type = REMOVE_DATA_REQUEST;
         this.key = key;
     }
 

@@ -5,6 +5,7 @@ public class JoinRequest extends Message {
     protected int nodeId;
 
     public JoinRequest(int nodeId) {
+        this.request_type = JOIN_REQUEST;
         this.nodeId = nodeId;
     }
 

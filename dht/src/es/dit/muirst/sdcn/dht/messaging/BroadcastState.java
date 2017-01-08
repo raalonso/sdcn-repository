@@ -13,6 +13,7 @@ public class BroadcastState extends Message {
 
 
     public BroadcastState(int nodeId, int[] l, Hashtable m) {
+        this.request_type = BROADCAST_STATE;
         this.nodeId = nodeId;
         setL(nodeId, l);
         setM(m);

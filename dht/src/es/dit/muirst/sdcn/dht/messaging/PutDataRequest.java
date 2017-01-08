@@ -7,6 +7,7 @@ public class PutDataRequest extends Message {
     protected boolean fw_flag;
 
     public PutDataRequest(int key, String data) {
+        this.request_type = PUT_DATA_REQUEST;
         this.key = key;
         this.data = data;
         fw_flag = false;

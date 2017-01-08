@@ -11,6 +11,7 @@ public class JoinResponse extends Message {
 
 
     public JoinResponse(int nodeId, int[] leafSet) {
+        this.request_type = JOIN_RESPONSE;
         this.nodeId = nodeId;
 
         setLeafSet(nodeId, leafSet);
