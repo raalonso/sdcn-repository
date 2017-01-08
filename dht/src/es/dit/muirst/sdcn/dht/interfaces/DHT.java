@@ -3,6 +3,7 @@ package es.dit.muirst.sdcn.dht.interfaces;
 
 import es.dit.muirst.sdcn.dht.messaging.PutDataRequest;
 import es.dit.muirst.sdcn.dht.messaging.RemoveDataRequest;
+import es.dit.muirst.sdcn.dht.messaging.GetDataRequest;
 
 public interface DHT<Data> {
 
@@ -35,7 +36,13 @@ public interface DHT<Data> {
     //
     void putDataRequest(PutDataRequest request);
     void removeDataRequest(RemoveDataRequest request);
+    Data getDataRequest(GetDataRequest request);
 
+    /**
+     * Print out Local DHT of local node.
+     *
+     * @return local DHT
+     */
     String printOutLocalDHT();
 
 }
