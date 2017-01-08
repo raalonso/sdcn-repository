@@ -15,9 +15,9 @@ public class OverlayNetwork {
 
     public void printOutNetwork() {
         System.out.println("\n-- Overlay Network -----");
-        for (Node item: this.nodes)
-            System.out.println(item);
-        // nodes.forEach(System.out::println);
+//        for (Node item: this.nodes)
+//            System.out.println(item);
+        nodes.forEach(System.out::println);
         System.out.println("------------------------\n");
     }
 
