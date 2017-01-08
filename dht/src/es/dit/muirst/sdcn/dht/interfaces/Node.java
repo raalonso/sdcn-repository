@@ -5,14 +5,16 @@ import es.dit.muirst.sdcn.dht.messaging.Message;
 
 import java.util.Hashtable;
 
-public interface Node <Address> {
+public interface Node {
 
     // Init Pastry
     //
-    int initPastry(Node bootstrapNode, int key);
+    int initPastry(int key) throws Exception;
+    void closePastry();
+
+    default void run() {}
 
     int getNodeId();
-    Address get(int key);
 
     // Core routing algorithm
     //
@@ -23,6 +25,9 @@ public interface Node <Address> {
     StateTable join(Node node);
     void leave(Node fromNode, int nodeId, StateTable stateTable);
     void broadcastState(Node fromNode, StateTable stateTable);
+
+    //
+    void joined();
 
     //
     void onNodeLeave(int nodeId);
