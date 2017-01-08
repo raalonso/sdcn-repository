@@ -5,6 +5,7 @@ import es.dit.muirst.sdcn.dht.interfaces.Node;
 import es.dit.muirst.sdcn.dht.StateTable;
 import es.dit.muirst.sdcn.dht.messaging.Message;
 import es.dit.muirst.sdcn.dht.messaging.PutDataRequest;
+import es.dit.muirst.sdcn.dht.messaging.RemoveDataRequest;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -139,6 +140,26 @@ public class ObjectNode implements Node<Object>, DHT<String> {
                 }
 
                 node.putDataRequest(request);
+            }
+        }
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_DATA to Leaf Set..." + ANSI_RESET);
+    }
+
+    public void broadcastRemoveData(int key) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Sending BROADCAST_REMOVE_DATA to Leaf Set..." + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3}; // order to send BROADCAST_REMOVE_DATA
+
+        for (int i : numbers) {
+            int nodeId = this.leafSet[i];
+            if (nodeId != 0) {
+                System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
+                DHT node = (DHT) this.neighborhoodSet.get(nodeId);
+
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Deliver REMOVE_DATA_REQUEST to nodeId " + node.getNodeId() + ANSI_RESET);
+                RemoveDataRequest request = new RemoveDataRequest(key);
+                node.removeDataRequest(request);
             }
         }
 
@@ -725,17 +746,163 @@ public class ObjectNode implements Node<Object>, DHT<String> {
     }
 
     @Override
+    public void removeDataRequest(RemoveDataRequest request) {
+        // actually should be called onRemoveDataRequest
+        //
+
+        // Request parameters, key and data
+        //
+        int key = request.getKey();
+
+        System.out.println("\nPastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received REMOVE_DATA_REQUEST with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId); // (from, to)
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        // Key inside Leaf Set
+        //
+        boolean isInsideLeafSet = true;
+        if (isInsideLeafSet) {
+            if (this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key in local Hash Table... remove data in Local Hash Table" + ANSI_RESET);
+
+                // Remove data in local Hash Table
+                //
+                this.localData.remove(key);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key NOT stored in Local Hash Table " + ANSI_RESET);
+            }
+        }
+
+    }
+
+    @Override
     public String getData(int key) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received GET_DATA with key " + key + ANSI_RESET);
+
         if (this.localData.containsKey(key)) {
+            System.out.println("Pastry Node " + this.nodeId + ": DATA key " + key + " in local Hash Table");
+
             return (String) this.localData.get(key);
         }
 
-        // TODO: Add your code here...
-        return null;
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId);
+
+        // Data key is within range of our leaf set
+        //
+        int minDistance = d_fromLocalNode;
+        int nodeIndex = -1;
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if (Math.abs(leafDistances[i]) < Math.abs(minDistance)) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        ////
+        // The variable result is a tuple with nodeId, distance
+        //
+        int[] result = new int[2];
+
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+
+        result[1] = minDistance;
+        //
+        ////
+
+        int routeToNodeId = result[0];
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Route GET_DATA to nodeId " + routeToNodeId + ANSI_RESET);
+
+        DHT fwdNode = (DHT) this.neighborhoodSet.get(routeToNodeId);
+
+        String data = (String) fwdNode.getData(key);
+
+        return data;
+
     }
 
     @Override
     public void removeData(int key) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received REMOVE_DATA with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId);
+
+        // Data key is within range of our leaf set
+        //
+        int minDistance = d_fromLocalNode;
+        int nodeIndex = -1;
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if (Math.abs(leafDistances[i]) < Math.abs(minDistance)) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        ////
+        // The variable result is a tuple with nodeId, distance
+        //
+        int[] result = new int[2];
+
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+
+        result[1] = minDistance;
+        //
+        ////
+
+        int routeToNodeId = result[0];
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Route to nodeId " + routeToNodeId + ANSI_RESET);
+
+        if (isDataInLeafSet(key, routeToNodeId)) {
+            if (this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key in local Hash Table... remove data in Local Hash Table" + ANSI_RESET);
+
+                // Remove data in local Hash Table
+                //
+                this.localData.remove(key);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key NOT stored in Local Hash Table " + ANSI_RESET);
+            }
+
+            // Forward remove data to all nodes in the leaf set
+            //
+            broadcastRemoveData(key);
+
+        } else {
+            DHT fwdNode = (DHT) this.neighborhoodSet.get(routeToNodeId);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Route REMOVE_DATA_REQUEST to nodeId " + routeToNodeId + ANSI_RESET);
+
+            fwdNode.removeData(key);
+
+        }
 
     }
 
