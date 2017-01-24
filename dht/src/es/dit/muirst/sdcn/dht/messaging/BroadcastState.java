@@ -12,8 +12,8 @@ public class BroadcastState extends Message {
     int[] L; // Leaf set
 
 
-    public BroadcastState(int nodeId, int[] l, Hashtable m) {
-        this.request_type = BROADCAST_STATE;
+    public BroadcastState(int nodeId, String UUID, int[] l, Hashtable m) {
+        super(BROADCAST_STATE, UUID);
         this.nodeId = nodeId;
         setL(nodeId, l);
         setM(m);
