@@ -4,9 +4,13 @@ public class JoinRequest extends Message {
 
     protected int nodeId;
 
-    public JoinRequest(int nodeId) {
-        this.request_type = JOIN_REQUEST;
+    public JoinRequest(int nodeId, String UUID) {
+        super(JOIN_REQUEST, UUID);
         this.nodeId = nodeId;
+    }
+
+    public int getNodeId() {
+        return nodeId;
     }
 
     @Override
