@@ -36,8 +36,8 @@ public class ObjectNodeTest {
 
     @Test
     public void distance() throws Exception {
-        int d = node.distance(52, 140);
-        System.out.println(d);
+//        int d = node.distance(52, 140);
+//        System.out.println(d);
     }
 
     @Test
