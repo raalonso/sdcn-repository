@@ -3,8 +3,8 @@ package es.dit.muirst.sdcn.dht.messaging;
 public class RemoveDataRequest extends Message {
     protected int key;
 
-    public RemoveDataRequest(int key) {
-        this.request_type = REMOVE_DATA_REQUEST;
+    public RemoveDataRequest(String UUID, int key) {
+        super(REMOVE_DATA_REQUEST, UUID);
         this.key = key;
     }
 
