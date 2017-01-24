@@ -14,14 +14,19 @@ public abstract class Message implements Serializable {
 
     protected int request_type;
 
-    protected int sender;
+    protected String sender_address;
+
+    public Message(int request_type, String sender) {
+        this.request_type = request_type;
+        this.sender_address = sender;
+    }
 
     public int getRequest_type() {
         return request_type;
     }
 
-    public int getSender() {
-        return sender;
+    public String getSender_address() {
+        return sender_address;
     }
 
 }
