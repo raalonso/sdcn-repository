@@ -1,6 +1,7 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
 import java.util.Arrays;
+import java.util.Hashtable;
 
 public class JoinResponse extends Message {
 
@@ -8,13 +9,30 @@ public class JoinResponse extends Message {
 
     protected int nodeId; // nodeId of the node that attended the join request
     protected int[] L; // Leaf set
+    protected Hashtable M; // Neighborhood set
 
 
-    public JoinResponse(int nodeId, int[] leafSet) {
-        this.request_type = JOIN_RESPONSE;
+    public JoinResponse(int nodeId, String UUID, int[] leafSet, Hashtable m) {
+        super(JOIN_RESPONSE, UUID);
         this.nodeId = nodeId;
-
         setLeafSet(nodeId, leafSet);
+        setNeighborhoodSet(m);
+    }
+
+    public int getNodeId() {
+        return nodeId;
+    }
+
+    public int[] getLeafSet() {
+        return L;
+    }
+
+    public Hashtable getNeighborhoodSet() {
+        return M;
+    }
+
+    public void setNeighborhoodSet(Hashtable routingTable) {
+        this.M = (Hashtable) routingTable.clone();
     }
 
     public void setLeafSet(int nodeId, int[] leafSet) {
@@ -36,6 +54,7 @@ public class JoinResponse extends Message {
         return "JoinResponse{" +
                 "nodeId=" + nodeId +
                 ", L=" + Arrays.toString(L) +
+                ", M=" + M +
                 '}';
     }
 }
