@@ -28,7 +28,7 @@ public class SerializationTest {
     @Test
     public void ser_join_request() throws Exception {
 
-        JoinRequest request = new JoinRequest(12);
+        JoinRequest request = new JoinRequest(12, "MY_UUID");
         System.out.println("Object class " + request);
 
         try {
@@ -70,7 +70,13 @@ public class SerializationTest {
     public void ser_join_response() throws Exception {
 
         int[] leafSet = {12, 20, 25, 30};
-        JoinResponse join_response = new JoinResponse(23, leafSet);
+        Hashtable neighborhoodSet = new Hashtable(l*2);
+        neighborhoodSet.put(12, new Integer(1222));
+        neighborhoodSet.put(20, new Integer(1222));
+        neighborhoodSet.put(25, new Integer(1222));
+        neighborhoodSet.put(30, new Integer(1222));
+
+        JoinResponse join_response = new JoinResponse(23, "MY_UUID", leafSet, neighborhoodSet);
         System.out.println("Object class " + join_response);
 
         try {
@@ -118,7 +124,7 @@ public class SerializationTest {
         neighborhoodSet.put(25, new Integer(1222));
         neighborhoodSet.put(30, new Integer(1222));
 
-        BroadcastState broadcast_state = new BroadcastState(nodeId, leafSet, neighborhoodSet);
+        BroadcastState broadcast_state = new BroadcastState(nodeId, "MY_UUID", leafSet, neighborhoodSet);
         System.out.println("Object class " + broadcast_state);
 
         try {
