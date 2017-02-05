@@ -2,7 +2,7 @@ package es.dit.muirst.sdcn.dht.messaging;
 
 import java.io.Serializable;
 
-public abstract class Message implements Serializable {
+public abstract class PastryMessage implements Serializable {
 
     public static final int JOIN_REQUEST = 0x01;
     public static final int JOIN_RESPONSE = 0x02;
@@ -11,12 +11,15 @@ public abstract class Message implements Serializable {
     public static final int PUT_DATA_REQUEST = 0x04;
     public static final int REMOVE_DATA_REQUEST = 0x05;
     public static final int GET_DATA_REQUEST = 0x06;
+    public static final int GET_DATA_RESPONSE = 0x07;
+    public static final int BROADCAST_PUT_DATA = 0x08;
+    public static final int BROADCAST_REMOVE_DATA = 0x09;
 
     protected int request_type;
 
     protected String sender_address;
 
-    public Message(int request_type, String sender) {
+    public PastryMessage(int request_type, String sender) {
         this.request_type = request_type;
         this.sender_address = sender;
     }
