@@ -1,13 +1,13 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
-public class PutDataRequest extends Message {
+public class PutDataRequest extends PastryMessage {
     protected int key;
     protected String data;
 
     protected boolean fw_flag;
 
-    public PutDataRequest(String UUID, int key, String data) {
-        super(PUT_DATA_REQUEST, UUID);
+    public PutDataRequest(String sender_UUID, int key, String data) {
+        super(PUT_DATA_REQUEST, sender_UUID);
         this.key = key;
         this.data = data;
         fw_flag = false;
