@@ -1,7 +1,7 @@
 package es.dit.muirst.sdcn.dht.interfaces;
 
 import es.dit.muirst.sdcn.dht.StateTable;
-import es.dit.muirst.sdcn.dht.messaging.Message;
+import es.dit.muirst.sdcn.dht.messaging.PastryMessage;
 
 import java.util.Hashtable;
 
@@ -18,7 +18,7 @@ public interface Node {
 
     // Core routing algorithm
     //
-    void route(Message msg, int key);
+    void route(PastryMessage msg, int key);
 
     // Operations
     //
