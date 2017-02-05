@@ -24,7 +24,7 @@ public class OverlayNetwork {
     public void printOutDHT() {
         System.out.println("\n-- Distributed Hash Table (DHT) -----");
         for (Node item: this.nodes)
-            System.out.println(((DHT) item).printOutLocalDHT());
+            System.out.println(((ObjectNode) item).printOutLocalDHT());
         // nodes.forEach(System.out::println);
         System.out.println("------------------------\n");
     }
