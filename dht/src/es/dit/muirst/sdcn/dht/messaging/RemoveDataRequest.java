@@ -1,6 +1,6 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
-public class RemoveDataRequest extends Message {
+public class RemoveDataRequest extends PastryMessage {
     protected int key;
 
     public RemoveDataRequest(String UUID, int key) {
