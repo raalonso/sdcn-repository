@@ -1,7 +1,9 @@
 package es.dit.muirst.sdcn.dht;
 
 import es.dit.muirst.sdcn.dht.interfaces.Node;
-import es.dit.muirst.sdcn.dht.messaging.Message;
+import es.dit.muirst.sdcn.dht.messaging.GetDataRequest;
+import es.dit.muirst.sdcn.dht.messaging.PutDataRequest;
+import es.dit.muirst.sdcn.dht.messaging.RemoveDataRequest;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -307,11 +309,30 @@ public abstract class PastryNode<A> implements Node {
         }
     }
 
+    public boolean isDataInLeafSet(int key, int routeToNodeId) {
+//        if ((routeToNodeId == this.getNodeId()) || (routeToNodeId == this.leafSet[1]) || (routeToNodeId == this.leafSet[2])) {
+        if (routeToNodeId == this.getNodeId()) {
+            System.out.println("Pastry Node " + this.nodeId + ": DATA key " + key + " is within range of local node Leaf Set");
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    public String printOutLocalDHT() {
+        return "LocalDHT {" +
+                ANSI_RED + "nodeId=" + this.nodeId + ANSI_RESET +
+                ", " + ANSI_BLUE + " DATA=" + this.localData.keySet() + ANSI_RESET +
+                '}';
+    }
+
     public String toString() {
         return "Pastry Node {" +
                 "name='" + name + '\'' +
                 ", " + ANSI_RED + "nodeId=" + this.nodeId + ANSI_RESET +
                 ", " + ANSI_BLUE + "L=" + Arrays.toString(this.leafSet) + ANSI_RESET +
+                ", " + ANSI_YELLOW + " DATA=" + this.localData.keySet() + ANSI_RESET +
                 ", M=" + this.neighborhoodSet +
                 '}';
     }
