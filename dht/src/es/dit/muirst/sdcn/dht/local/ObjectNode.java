@@ -5,7 +5,7 @@ import es.dit.muirst.sdcn.dht.interfaces.DHT;
 import es.dit.muirst.sdcn.dht.interfaces.Node;
 import es.dit.muirst.sdcn.dht.StateTable;
 import es.dit.muirst.sdcn.dht.messaging.GetDataRequest;
-import es.dit.muirst.sdcn.dht.messaging.Message;
+import es.dit.muirst.sdcn.dht.messaging.PastryMessage;
 import es.dit.muirst.sdcn.dht.messaging.PutDataRequest;
 import es.dit.muirst.sdcn.dht.messaging.RemoveDataRequest;
 
@@ -98,15 +98,15 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
     }
 
     public void broadcastData(int key, String data, boolean fwEnabled) {
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Sending BROADCAST_DATA to Leaf Set..." + ANSI_RESET);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Sending BROADCAST_PUT_DATA to Leaf Set..." + ANSI_RESET);
 
-        int[] numbers = {1, 2, 0, 3}; // order to send BROADCAST_DATA
+        int[] numbers = {1, 2, 0, 3}; // order to send BROADCAST_PUT_DATA
 
         for (int i : numbers) {
             int nodeId = this.leafSet[i];
             if (nodeId != 0) {
                 System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
-                DHT node = (DHT) this.neighborhoodSet.get(nodeId);
+                ObjectNode node = (ObjectNode) this.neighborhoodSet.get(nodeId);
 
                 System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Deliver PUT_DATA_REQUEST to nodeId " + node.getNodeId() + ANSI_RESET);
                 PutDataRequest request = new PutDataRequest(this.toString(), key, data);
@@ -119,7 +119,7 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
             }
         }
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_DATA to Leaf Set..." + ANSI_RESET);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_PUT_DATA to Leaf Set..." + ANSI_RESET);
     }
 
     public void broadcastRemoveData(int key) {
@@ -131,7 +131,7 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
             int nodeId = this.leafSet[i];
             if (nodeId != 0) {
                 System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
-                DHT node = (DHT) this.neighborhoodSet.get(nodeId);
+                ObjectNode node = (ObjectNode) this.neighborhoodSet.get(nodeId);
 
                 System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Deliver REMOVE_DATA_REQUEST to nodeId " + node.getNodeId() + ANSI_RESET);
                 RemoveDataRequest request = new RemoveDataRequest(this.toString(), key);
@@ -139,7 +139,7 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
             }
         }
 
-        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_DATA to Leaf Set..." + ANSI_RESET);
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_PUT_DATA to Leaf Set..." + ANSI_RESET);
     }
 
     @Override
@@ -189,7 +189,7 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
     }
 
     @Override
-    public void route(Message msg, int key) {
+    public void route(PastryMessage msg, int key) {
         // Any node A that receives a message M with destination address D routes the message by comparing D with its
         // own GUID A and with each of the GUIDs in its leaf set and forwarding M to the node amongst them that is
         // numerically closest to D.
@@ -298,17 +298,6 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
         return stateTable;
     }
 
-    public boolean isDataInLeafSet(int key, int routeToNodeId) {
-//        if ((routeToNodeId == this.getNodeId()) || (routeToNodeId == this.leafSet[1]) || (routeToNodeId == this.leafSet[2])) {
-        if (routeToNodeId == this.getNodeId()) {
-            System.out.println("Pastry Node " + this.nodeId + ": DATA key " + key + " is within range of local node Leaf Set");
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
     @Override
     public void putData(int key, String data) {
         System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received PUT_DATA '" + data + "' with key " + key + ANSI_RESET);
@@ -406,7 +395,6 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
         return result;
     }
 
-    @Override
     public void putDataRequest(PutDataRequest request) {
         // actually should be called onPutDataRequest
         //
@@ -445,7 +433,6 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
 
     }
 
-    @Override
     public void removeDataRequest(RemoveDataRequest request) {
         // actually should be called onRemoveDataRequest
         //
@@ -483,7 +470,6 @@ public class ObjectNode extends PastryNode<Object> implements DHT<String> {
 
     }
 
-    @Override
     public String getDataRequest(GetDataRequest request) {
         return null;
     }
