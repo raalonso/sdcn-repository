@@ -1,6 +1,6 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
-public class JoinRequest extends Message {
+public class JoinRequest extends PastryMessage {
 
     protected int nodeId;
 
