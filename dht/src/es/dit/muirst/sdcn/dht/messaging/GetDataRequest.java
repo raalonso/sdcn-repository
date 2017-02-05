@@ -1,7 +1,7 @@
 package es.dit.muirst.sdcn.dht.messaging;
 
 
-public class GetDataRequest extends Message {
+public class GetDataRequest extends PastryMessage {
     protected int key;
 
     public GetDataRequest(int key, String UUID) {
