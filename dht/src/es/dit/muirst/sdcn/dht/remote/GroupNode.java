@@ -1,15 +1,10 @@
 package es.dit.muirst.sdcn.dht.remote;
 
-
 import es.dit.muirst.sdcn.dht.PastryNode;
 import es.dit.muirst.sdcn.dht.StateTable;
 import es.dit.muirst.sdcn.dht.interfaces.DHT;
 import es.dit.muirst.sdcn.dht.interfaces.Node;
-import es.dit.muirst.sdcn.dht.local.ObjectNode;
-import es.dit.muirst.sdcn.dht.messaging.BroadcastState;
-import es.dit.muirst.sdcn.dht.messaging.JoinRequest;
-import es.dit.muirst.sdcn.dht.messaging.JoinResponse;
-import es.dit.muirst.sdcn.dht.messaging.Message;
+import es.dit.muirst.sdcn.dht.messaging.*;
 import org.jgroups.*;
 import org.apache.commons.cli.*;
 import org.jgroups.util.UUID;
@@ -23,7 +18,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Logger;
 
-public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, Receiver {
+
+public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<String>, Node, Receiver {
 
     private static final Logger LOGGER = Logger.getLogger(GroupNode.class.getName());
 
@@ -158,9 +154,22 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, 
         return null;
     }
 
-    @Override
-    public void route(Message msg, int key) {
 
+    public void route(PastryMessage request, int toNodeId) {
+
+        String routeToNodeUUID = (String) this.neighborhoodSet.get(toNodeId);
+
+        try {
+            Address dest = UUID.fromString(routeToNodeUUID);
+            Address src = null; // address of sender
+
+            org.jgroups.Message msg = new org.jgroups.Message(dest, src, request);
+
+            this.channel.send(msg);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -347,28 +356,59 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, 
 
     @Override
     public void receive(org.jgroups.Message msg) {
-        Message request = (Message) msg.getObject();
+        // Get request and sender nodeId from JGroups message
+        PastryMessage request = (PastryMessage) msg.getObject();
         String fromNodeId = msg.getSrc().toString();
 
         System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received request " + request + " from nodeId " + fromNodeId + "..." + ANSI_RESET);
 
-        if (request.getRequest_type() == Message.JOIN_REQUEST) {
+        if (request.getRequest_type() == PastryMessage.JOIN_REQUEST) {
             System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle JOIN_REQUEST..." + ANSI_RESET);
 
             JoinRequest join_request = (JoinRequest) request;
             onJoinRequest(join_request);
         }
-        else if (request.getRequest_type() == Message.JOIN_RESPONSE) {
+        else if (request.getRequest_type() == PastryMessage.JOIN_RESPONSE) {
             System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle JOIN_RESPONSE..." + ANSI_RESET);
 
             JoinResponse join_response = (JoinResponse) request;
             onJoinResponse(join_response);
         }
-        else if (request.getRequest_type() == Message.BROADCAST_STATE) {
+        else if (request.getRequest_type() == PastryMessage.BROADCAST_STATE) {
             System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle JOIN_RESPONSE..." + ANSI_RESET);
 
             BroadcastState broadcast_state = (BroadcastState) request;
             onBroadcastState(broadcast_state);
+        }
+        else if (request.getRequest_type() == PastryMessage.PUT_DATA_REQUEST) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle PUT_DATA_REQUEST..." + ANSI_RESET);
+
+            PutDataRequest put_data_request = (PutDataRequest) request;
+            putData(put_data_request.getKey(), put_data_request.getData());
+        }
+        else if (request.getRequest_type() == PastryMessage.BROADCAST_PUT_DATA) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle BROADCAST_PUT_DATA..." + ANSI_RESET);
+
+            BroadcastPutData broadcast_data = (BroadcastPutData) request;
+            onBroadcastPutData(broadcast_data);
+        }
+        else if (request.getRequest_type() == PastryMessage.GET_DATA_REQUEST) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle GET_DATA_REQUEST..." + ANSI_RESET);
+
+            GetDataRequest get_data_request = (GetDataRequest) request;
+            onGetDataRequest(get_data_request);
+        }
+        else if (request.getRequest_type() == PastryMessage.REMOVE_DATA_REQUEST) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle REMOVE_DATA_REQUEST..." + ANSI_RESET);
+
+            RemoveDataRequest remove_data_request = (RemoveDataRequest) request;
+            removeData(remove_data_request.getKey());
+        }
+        else if (request.getRequest_type() == PastryMessage.BROADCAST_REMOVE_DATA) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle REMCVE_DATA_REQUEST..." + ANSI_RESET);
+
+            BroadcastRemoveData broadcast_remove_data = (BroadcastRemoveData) request;
+            onBroadcastRemoveData(broadcast_remove_data);
         }
 
         System.out.println("Pastry Node " + this.nodeId + ": " + this);
@@ -384,6 +424,363 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, 
     public void setState(InputStream inputStream) throws Exception {
 
     }
+
+
+    public void broadcastData(int key, String data, boolean fwEnabled) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Sending BROADCAST_PUT_DATA to Leaf Set..." + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3}; // order to send BROADCAST_PUT_DATA
+
+        for (int i : numbers) {
+            int nodeId = this.leafSet[i];
+            if (nodeId != 0) {
+                System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
+
+                String fwdNodeUUID = (String) this.neighborhoodSet.get(nodeId);
+
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Deliver PUT_DATA_REQUEST to nodeId " + nodeId + ANSI_RESET);
+
+                try {
+                    Address dest = UUID.fromString(fwdNodeUUID); // the message is sent to a member of the group
+                    Address src = null; // address of sender
+
+                    BroadcastPutData request = new BroadcastPutData(this.addressAsUUID, key, data);
+
+                    org.jgroups.Message msg = new org.jgroups.Message(dest, src, request);
+
+                    this.channel.send(msg);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_PUT_DATA to Leaf Set..." + ANSI_RESET);
+    }
+
+    public void broadcastRemoveData(int key) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Sending BROADCAST_REMOVE_DATA to Leaf Set..." + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3}; // order to send BROADCAST_REMOVE_DATA
+
+        for (int i : numbers) {
+            int nodeId = this.leafSet[i];
+            if (nodeId != 0) {
+                System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
+
+                String fwdNodeUUID = (String) this.neighborhoodSet.get(nodeId);
+
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Deliver PUT_DATA_REQUEST to nodeId " + nodeId + ANSI_RESET);
+
+                try {
+                    Address dest = UUID.fromString(fwdNodeUUID); // the message is sent to a member of the group
+                    Address src = null; // address of sender
+
+                    BroadcastRemoveData request = new BroadcastRemoveData(this.addressAsUUID, key);
+
+                    org.jgroups.Message msg = new org.jgroups.Message(dest, src, request);
+
+                    this.channel.send(msg);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + ">>>> Ended BROADCAST_REMOVE_DATA to Leaf Set..." + ANSI_RESET);
+    }
+
+
+    //////////////////////////////////
+    // Implementation interface DHT
+    //
+    @Override
+    public void putData(int key, String data) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received PUT_DATA '" + data + "' with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId);
+
+        // Data key is within range of our leaf set
+        //
+        int minDistance = d_fromLocalNode;
+        int nodeIndex = -1;
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if (leafDistances[i] == 0) {
+                nodeIndex = i;
+                minDistance = 0;
+            }
+            else if (Math.abs(leafDistances[i]) < Math.abs(minDistance)) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        ////
+        // The variable result is a tuple with nodeId, distance
+        //
+        int[] result = new int[2];
+
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+
+        result[1] = minDistance;
+        //
+        ////
+
+        int routeToNodeId = result[0];
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Route to nodeId " + routeToNodeId + ANSI_RESET);
+
+        if (isDataInLeafSet(key, routeToNodeId)) {
+            if (!this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key inside local Leaf Set... stored data in Local Hash Table " + ANSI_RESET);
+
+                // Stored data in local Hash Table
+                //
+                this.localData.put(key, data);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key ALREADY stored in Local Hash Table " + ANSI_RESET);
+            }
+
+            // Forward data to all nodes in the leaf set
+            //
+            broadcastData(key, data, true);
+
+        } else {
+            PutDataRequest request = new PutDataRequest(this.addressAsUUID, key, data);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Route PUT_DATA request to nodeId " + routeToNodeId + ANSI_RESET);
+            route(request, routeToNodeId);
+
+            return;
+        }
+
+    }
+
+    @Override
+    public String getData(int key) {
+        return null;
+    }
+
+    @Override
+    public void removeData(int key) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received REMOVE_DATA with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId);
+
+        // Data key is within range of our leaf set
+        //
+        int minDistance = d_fromLocalNode;
+        int nodeIndex = -1;
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if (Math.abs(leafDistances[i]) < Math.abs(minDistance)) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        ////
+        // The variable result is a tuple with nodeId, distance
+        //
+        int[] result = new int[2];
+
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+
+        result[1] = minDistance;
+        //
+        ////
+
+        int routeToNodeId = result[0];
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Route to nodeId " + routeToNodeId + ANSI_RESET);
+
+        if (isDataInLeafSet(key, routeToNodeId)) {
+            if (this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key in local Hash Table... remove data in Local Hash Table" + ANSI_RESET);
+
+                // Remove data in local Hash Table
+                //
+                this.localData.remove(key);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key NOT stored in Local Hash Table " + ANSI_RESET);
+            }
+
+            // Forward remove data to all nodes in the leaf set
+            //
+            broadcastRemoveData(key);
+
+        } else {
+            RemoveDataRequest request = new RemoveDataRequest(this.addressAsUUID, key);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Route REMOVE_DATA request to nodeId " + routeToNodeId + ANSI_RESET);
+            route(request, routeToNodeId);
+        }
+
+    }
+
+
+    public void onBroadcastPutData(BroadcastPutData request) {
+        // Request parameters, key and data
+        //
+        int key = request.getKey();
+        String data = request.getData();
+
+        System.out.println("\nPastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received PUT_DATA_REQUEST " + data + " with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId); // (from, to)
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        // Key inside Leaf Set
+        //
+        boolean isInsideLeafSet = true;
+        if (isInsideLeafSet) {
+            if (!this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key inside local Leaf Set... stored data in Local Hash Table " + ANSI_RESET);
+
+                // Stored data in local Hash Table
+                //
+                this.localData.put(key, data);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key ALREADY stored in Local Hash Table " + ANSI_RESET);
+            }
+        }
+
+    }
+
+    public void onBroadcastRemoveData(BroadcastRemoveData request) {
+        // Request parameters, key and data
+        //
+        int key = request.getKey();
+
+        System.out.println("\nPastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received REMOVE_DATA_REQUEST with key " + key + ANSI_RESET);
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId); // (from, to)
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Distance from local node to key " + d_fromLocalNode + ANSI_RESET);
+
+        // Key inside Leaf Set
+        //
+        boolean isInsideLeafSet = true;
+        if (isInsideLeafSet) {
+            if (this.localData.containsKey(key)) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key in local Hash Table... remove data in Local Hash Table" + ANSI_RESET);
+
+                // Remove data in local Hash Table
+                //
+                this.localData.remove(key);
+            }
+            else {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_PURPLE + "Key NOT stored in Local Hash Table " + ANSI_RESET);
+            }
+        }
+
+    }
+
+    public void onGetDataRequest(GetDataRequest request) {
+        int key = request.getKey();
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received GET_DATA with key " + key + ANSI_RESET);
+
+        if (this.localData.containsKey(key)) {
+            String data = (String) this.localData.get(key);
+
+            System.out.println("Pastry Node " + this.nodeId + ": DATA key " + key + " in local Hash Table with value " + data);
+
+            GetDataResponse response = new GetDataResponse(this.addressAsUUID, key, data);
+
+            String routeToNodeUUID = request.getSender_address();
+
+            try {
+                Address dest = UUID.fromString(routeToNodeUUID);
+                Address src = null; // address of sender
+
+                org.jgroups.Message msg = new org.jgroups.Message(dest, src, response);
+
+                this.channel.send(msg);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        int myNodeId = this.getNodeId();
+
+        // Calculate distance with local nodeId and received key for the data
+        //
+        int[] leafDistances = calculateDistances(this.leafSet, key);
+        int d_fromLocalNode = distance(key, myNodeId);
+
+        // Data key is within range of our leaf set
+        //
+        int minDistance = d_fromLocalNode;
+        int nodeIndex = -1;
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if (Math.abs(leafDistances[i]) < Math.abs(minDistance)) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        ////
+        // The variable result is a tuple with nodeId, distance
+        //
+        int[] result = new int[2];
+
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+
+        result[1] = minDistance;
+        //
+        ////
+
+        int routeToNodeId = result[0];
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Route GET_DATA to nodeId " + routeToNodeId + ANSI_RESET);
+
+        route(request, routeToNodeId);
+
+    }
+
+
 
     public static void main(String[] args) throws Exception {
         Options options = new Options();
@@ -414,7 +811,8 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, 
             return;
         }
 
-
+        // Read config parameters
+        //
         String nodeName = cmd.getOptionValue("n");
         int nodeId = Integer.parseInt(cmd.getOptionValue("i"));
         String bootstrapNodeId = cmd.getOptionValue("b");
@@ -432,7 +830,5 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements Node, 
         node.closePastry();
 
     }
-
-
 
 }
