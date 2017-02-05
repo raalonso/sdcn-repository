@@ -3,7 +3,7 @@ package es.dit.muirst.sdcn.dht.messaging;
 import java.util.Arrays;
 import java.util.Hashtable;
 
-public class JoinResponse extends Message {
+public class JoinResponse extends PastryMessage {
 
     private static final int l = 2;
 
