@@ -79,6 +79,14 @@ public abstract class PastryNode<A> implements Node {
     }
 
 
+    public void removeNodeFromLeafSet(int left_nodeId) {
+        for (int i = 0; i < this.leafSet.length; i++) {
+            if (this.leafSet[i] == left_nodeId) {
+                this.leafSet[i] = 0;
+            }
+        }
+    }
+
     @Override
     public void updateLeafSet(int[] leafs) {
         SortedSet stateTable = new TreeSet();
