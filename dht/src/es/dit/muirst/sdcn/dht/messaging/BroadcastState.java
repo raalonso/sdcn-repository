@@ -11,6 +11,9 @@ public class BroadcastState extends PastryMessage {
     Hashtable M; // Neighborhood set
     int[] L; // Leaf set
 
+    boolean flag = false; // indicates message generated from a node departure
+    int left_nodeId = 0; // broadcast message generated from node departure
+
 
     public BroadcastState(int nodeId, String UUID, int[] l, Hashtable m) {
         super(BROADCAST_STATE, UUID);
@@ -50,6 +53,22 @@ public class BroadcastState extends PastryMessage {
         // Larger
         this.L[3] = leafSet[2];
         this.L[4] = leafSet[3];
+    }
+
+    public void setFlag(boolean flag) {
+        this.flag = flag;
+    }
+
+    public boolean isFlag() {
+        return flag;
+    }
+
+    public void setLeft_nodeId(int left_nodeId) {
+        this.left_nodeId = left_nodeId;
+    }
+
+    public int getLeft_nodeId() {
+        return left_nodeId;
     }
 
     @Override
