@@ -15,6 +15,9 @@ public abstract class PastryMessage implements Serializable {
     public static final int BROADCAST_PUT_DATA = 0x08;
     public static final int BROADCAST_REMOVE_DATA = 0x09;
 
+    public static final int LEAVE_REQUEST = 0x0A;
+    public static final int BROADCAST_NODE_DEPARTURE = 0x0B;
+
     protected int request_type;
 
     protected String sender_address;
