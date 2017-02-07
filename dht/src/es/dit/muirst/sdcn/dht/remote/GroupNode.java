@@ -13,9 +13,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.util.Hashtable;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 import java.util.logging.Logger;
 
 
@@ -29,6 +27,8 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
     String user_name = System.getProperty("user.name", "n/a");
 
     final List<String> state = new LinkedList<String>();
+
+    View current_view;
 
 
     public GroupNode(String name) {
@@ -44,6 +44,8 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
         this.channel.connect("PastryRing");
         this.channel.getState(null, 10000);
         this.channel.setDiscardOwnMessages(true); // All messages sent by node A will be discarded by node A
+
+        this.current_view = null;
 
         if (key == 0) this.nodeId = createKey();
         else this.nodeId = key;
@@ -127,7 +129,7 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
                 if (this.neighborhoodSet.containsKey(nodeId)) {
                     String neighborNodeUUID = (String) this.neighborhoodSet.get(nodeId);
 
-                    BroadcastState request = new BroadcastState(this.nodeId, this.toString(), this.leafSet, this.neighborhoodSet);
+                    BroadcastState request = new BroadcastState(this.nodeId, this.addressAsUUID, this.leafSet, this.neighborhoodSet);
 
                     System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_STATE to neighbor " + nodeId + "..." + ANSI_RESET);
 
@@ -148,6 +150,40 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
             }
         }
     }
+
+    public void left(int left_nodeId) {
+        System.out.println("Pastry Node " + this.nodeId + ": Sending BROADCAST_NODE_DEPARTURE to neighbors...");
+
+        for (int i = 0; i < this.leafSet.length; i++) {
+            int nodeId = this.leafSet[i];
+            if (nodeId != 0) {
+                System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
+                if (this.neighborhoodSet.containsKey(nodeId)) {
+                    String neighborNodeUUID = (String) this.neighborhoodSet.get(nodeId);
+
+                    BroadcastNodeDeparture request = new BroadcastNodeDeparture(this.nodeId, left_nodeId, this.addressAsUUID, this.leafSet, this.neighborhoodSet);
+
+                    System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "BROADCAST_NODE_DEPARTURE:" + request + ANSI_RESET);
+                    System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_NODE_DEPARTURE to neighbor " + nodeId + "..." + ANSI_RESET);
+
+                    try {
+                        Address dest = UUID.fromString(neighborNodeUUID);
+                        Address src = null; // address of sender
+
+                        org.jgroups.Message msg = new org.jgroups.Message(dest, src, request);
+
+                        this.channel.send(msg);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                else {
+                    System.out.println("Pastry Node " + this.nodeId + ": >> ERROR Neighbour Pastry node " + nodeId + " NOT in Set");
+                }
+            }
+        }
+    }
+
 
     @Override
     public org.jgroups.Address get(int key) {
@@ -302,6 +338,57 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
         System.out.println("Pastry Node " + this.nodeId + ": " + "Updating Neighborhood Set...");
         updateNeighborhoodSet(message.getM());
 
+        if (message.isFlag()) {
+            // Need to communicate to nodes in LeafSet new State Table
+            //
+            for (int i = 0; i < this.leafSet.length; i++) {
+                int nodeId = this.leafSet[i];
+                if (nodeId != 0) {
+                    System.out.println("Pastry Node " + this.nodeId + ": >> Neighbour Pastry node " + nodeId);
+                    if (this.neighborhoodSet.containsKey(nodeId)) {
+                        String neighborNodeUUID = (String) this.neighborhoodSet.get(nodeId);
+
+                        if (message.getLeft_nodeId() != 0) {
+                            BroadcastNodeDeparture request1 = new BroadcastNodeDeparture(this.nodeId, message.getLeft_nodeId(), this.addressAsUUID, this.leafSet, this.neighborhoodSet);
+                            request1.setOnly_notification(true);
+
+                            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "BROADCAST_NODE_DEPARTURE:" + request1 + ANSI_RESET);
+                            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_NODE_DEPARTURE to neighbor " + nodeId + "..." + ANSI_RESET);
+
+                            try {
+                                Address dest = UUID.fromString(neighborNodeUUID);
+                                Address src = null; // address of sender
+
+                                org.jgroups.Message msg = new org.jgroups.Message(dest, src, request1);
+
+                                this.channel.send(msg);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        BroadcastState request = new BroadcastState(this.nodeId, this.addressAsUUID, this.leafSet, this.neighborhoodSet);
+
+                        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_STATE to neighbor " + nodeId + "..." + ANSI_RESET);
+
+                        try {
+                            Address dest = UUID.fromString(neighborNodeUUID);
+                            Address src = null; // address of sender
+
+                            org.jgroups.Message msg = new org.jgroups.Message(dest, src, request);
+
+                            this.channel.send(msg);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    else {
+                        System.out.println("Pastry Node " + this.nodeId + ": >> ERROR Neighbour Pastry node " + nodeId + " NOT in Set");
+                    }
+                }
+            }
+        }
+
     }
 
     @Override
@@ -315,9 +402,142 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
     }
 
     @Override
-    public void onNodeLeave(int nodeId) {
+    public void onNodeLeave(int left_nodeId) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Node DEPARTURE with nodeId " + left_nodeId + ANSI_RESET);
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removing node " + left_nodeId + " from Leaf Set..." + ANSI_RESET);
+        removeNodeFromLeafSet(left_nodeId);
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removed node " + left_nodeId + " from Leaf Set: " + this + ANSI_RESET);
+
+        System.out.println("Pastry Node " + this.nodeId + ": Removing node " + left_nodeId + " from local Neighborhood Set");
+        this.neighborhoodSet.remove(left_nodeId);
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removed node " + left_nodeId + " from local Neighborhood Set: " + this + ANSI_RESET);
+
+        // Create stateTable to send to other nodes
+        //
+        StateTable stateTable = new StateTable();
+        stateTable.setL(this.nodeId, this.leafSet);
+
+        int myNodeId = this.getNodeId();
+
+        int[] leafDistances = calculateDistances(this.leafSet, left_nodeId);
+
+        // Left nodeId is within range of our leaf set
+        //
+        int minDistance = MAX_NODE_IDS;
+        int nodeIndex = -1;
+
+        int d_fromLocalNode = distance(myNodeId, left_nodeId);
+        minDistance = d_fromLocalNode;
+
+        int[] numbers = {1, 2, 0, 3};
+        for (int i : numbers) {
+            if ((leafDistances[i] != 0) && (Math.abs(leafDistances[i]) < Math.abs(minDistance))) {
+                nodeIndex = i;
+                minDistance = leafDistances[i];
+            }
+        }
+
+        System.out.println("Pastry Node " + this.nodeId + ": Node index " + nodeIndex + " with min distance of " + minDistance);
+
+        // result is a tuple with nodeId, distance
+        int[] result = new int[2];
+        if (nodeIndex == -1) result[0] = myNodeId;
+        else result[0] = leafSet[nodeIndex];
+        result[1] = minDistance;
+
+        int routeToNodeId = result[0];
+
+        if (isInLeafSet(left_nodeId, routeToNodeId)) {
+            System.out.println("Pastry Node " + this.nodeId + ": Processing request in local node " + result[0] + " (with min distance of " + result[1] + ")");
+
+
+            // TODO: Add leave-response
+//            try {
+//                JoinResponse join_response = new JoinResponse(this.nodeId, this.addressAsUUID, this.leafSet, this.neighborhoodSet);
+//
+//                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending JOIN_RESPONSE to joined node " + request.getSender_address() + "..." + ANSI_RESET);
+//
+//                Address dest = UUID.fromString(request.getSender_address());
+//                Address src = null; // address of sender
+//
+//                org.jgroups.Message msg = new org.jgroups.Message(dest, src, join_response);
+//
+//                this.channel.send(msg);
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+
+            left(left_nodeId);
+
+
+        } else {
+            String fwdNodeUUID = (String) this.neighborhoodSet.get(routeToNodeId);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Route LEAVE request to nodeId " + result[0] + " (with min distance of " + result[1] + ")" + ANSI_RESET);
+
+            try {
+                LeaveRequest leave_request = new LeaveRequest(left_nodeId, this.addressAsUUID);
+
+                Address dest = UUID.fromString(fwdNodeUUID); // the message is sent to a member of the group
+                Address src = null; // address of sender
+
+                org.jgroups.Message msg = new org.jgroups.Message(dest, src, leave_request);
+
+                this.channel.send(msg);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
 
     }
+
+    public void onBroadcastNodeDeparture(BroadcastNodeDeparture request) {
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Received " + request + ANSI_RESET);
+
+        int left_nodeId = request.getNodeId();
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Node DEPARTURE with nodeId " + left_nodeId + ANSI_RESET);
+
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removing node " + left_nodeId + " from Leaf Set..." + ANSI_RESET);
+        removeNodeFromLeafSet(left_nodeId);
+        updateLeafSet(request.getLeafSet());
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removed node " + left_nodeId + " from Leaf Set: " + this + ANSI_RESET);
+
+        System.out.println("Pastry Node " + this.nodeId + ": Removing node " + left_nodeId + " from local Neighborhood Set");
+        this.neighborhoodSet.remove(left_nodeId);
+        updateNeighborhoodSet(request.getNeighborhoodSet());
+        System.out.println("Pastry Node " + this.nodeId + ": " + "Removed node " + left_nodeId + " from local Neighborhood Set: " + this + ANSI_RESET);
+
+        // Create stateTable to send to other nodes
+        //
+        StateTable stateTable = new StateTable();
+        stateTable.setL(this.nodeId, this.leafSet);
+
+        if (!request.isOnly_notification()) {
+            BroadcastState broadcast_state = new BroadcastState(this.nodeId, this.addressAsUUID, this.leafSet, this.neighborhoodSet);
+            broadcast_state.setFlag(true);
+            broadcast_state.setLeft_nodeId(left_nodeId);
+
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Sending BROADCAST_STATE to sender " + request.getSender_address() + "..." + ANSI_RESET);
+
+            try {
+                Address dest = UUID.fromString(request.getSender_address());
+                Address src = null; // address of sender
+
+                org.jgroups.Message msg = new org.jgroups.Message(dest, src, broadcast_state);
+
+                this.channel.send(msg);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
 
     @Override
     public void updateNeighborhoodSet(Hashtable neighborhoodSet) {
@@ -334,11 +554,41 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
     @Override
     public void viewAccepted(View new_view) {
         System.out.println("** view: " + new_view);
+
+        if (current_view != null) {
+            List<Address> left_members = View.leftMembers(current_view, new_view);
+
+            if (left_members.size() > 0) {
+                System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "Node with address " + left_members + " DEPARTURE" + ANSI_RESET);
+                List<Address> members = new_view.getMembers();
+                if (channel.getAddress().equals(members.get(0))) {
+                    // Node to handle the node departure
+                    //
+                    System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_GREEN + "Processing node departure in local node " + this.nodeId + ANSI_RESET);
+
+                    int left_nodeId = 0;
+                    for (Object key : this.neighborhoodSet.keySet()) {
+                        int nodeId = (Integer) key;
+
+                        String fwdNodeUUID = (String) this.neighborhoodSet.get(nodeId);
+                        Address neighbor = UUID.fromString(fwdNodeUUID);
+                        if (neighbor.equals(left_members.get(0))) {
+                            left_nodeId = nodeId;
+                            break;
+                        }
+                    }
+
+                    onNodeLeave(left_nodeId);
+                }
+            }
+        }
+
+        this.current_view = new_view;
     }
 
     @Override
     public void suspect(Address address) {
-
+        System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_RED + "Node with address " + address + " DEPARTURE" + ANSI_RESET);
     }
 
     @Override
@@ -375,7 +625,7 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
             onJoinResponse(join_response);
         }
         else if (request.getRequest_type() == PastryMessage.BROADCAST_STATE) {
-            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle JOIN_RESPONSE..." + ANSI_RESET);
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle BROADCAST_STATE..." + ANSI_RESET);
 
             BroadcastState broadcast_state = (BroadcastState) request;
             onBroadcastState(broadcast_state);
@@ -405,10 +655,22 @@ public class GroupNode extends PastryNode<org.jgroups.Address> implements DHT<St
             removeData(remove_data_request.getKey());
         }
         else if (request.getRequest_type() == PastryMessage.BROADCAST_REMOVE_DATA) {
-            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle REMCVE_DATA_REQUEST..." + ANSI_RESET);
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle REMOVE_DATA_REQUEST..." + ANSI_RESET);
 
             BroadcastRemoveData broadcast_remove_data = (BroadcastRemoveData) request;
             onBroadcastRemoveData(broadcast_remove_data);
+        }
+        else if (request.getRequest_type() == PastryMessage.LEAVE_REQUEST) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle LEAVE_REQUEST..." + ANSI_RESET);
+
+            LeaveRequest leave_request = (LeaveRequest) request;
+            onNodeLeave(leave_request.getNodeId());
+        }
+        else if (request.getRequest_type() == PastryMessage.BROADCAST_NODE_DEPARTURE) {
+            System.out.println("Pastry Node " + this.nodeId + ": " + ANSI_BLUE + "Handle BROADCAST_NODE_DEPARTURE..." + ANSI_RESET);
+
+            BroadcastNodeDeparture leave_request = (BroadcastNodeDeparture) request;
+            onBroadcastNodeDeparture(leave_request);
         }
 
         System.out.println("Pastry Node " + this.nodeId + ": " + this);
